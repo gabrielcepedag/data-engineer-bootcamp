@@ -1,4 +1,6 @@
 services:
+  elt_app:
+    build: .
   postgres:
     image: postgres:16
     container_name: postgres_local
