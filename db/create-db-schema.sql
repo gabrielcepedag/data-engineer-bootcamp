@@ -1,0 +1,5 @@
+\c project_1
+
+ALTER SCHEMA public RENAME TO bronze;
+CREATE SCHEMA IF NOT EXISTS silver;
+CREATE SCHEMA IF NOT EXISTS gold;
