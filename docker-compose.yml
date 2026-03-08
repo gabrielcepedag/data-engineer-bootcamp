@@ -24,7 +24,7 @@ services:
       - ./db/create-db-schema.sql:/docker-entrypoint-initdb.d/schema.sql
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - 5435:5432
+      - 5432:5432
     env_file:
       - .env
     environment:
