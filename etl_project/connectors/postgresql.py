@@ -1,3 +1,4 @@
+import pandas as pd
 from sqlalchemy import create_engine, Table, MetaData, Column
 from sqlalchemy import text
 from sqlalchemy.engine import URL, Engine
@@ -34,12 +35,34 @@ class PostgreSqlClient:
 
         self.engine = create_engine(connection_url)
 
-    def read(self, query: str):
+    def read(self, query: str) -> pd.DataFrame:
+        """Execute a SQL query and return the results as a Pandas DataFrame.
+
+        Args:
+            query: Raw SQL string to execute.
+
+        Returns:
+            DataFrame containing all rows returned by the query.
+        """
         import pandas as pd
         with self.engine.connect() as conn:
             return pd.read_sql(text(query), conn)
     
     def create_table(table_name: str, metadata: MetaData, engine: Engine):
+        """Create a table in the database by cloning its definition from existing metadata.
+
+        Copies column definitions (name, type, primary key) from a table already
+        registered in the provided MetaData object and creates it using a fresh
+        MetaData instance to avoid schema conflicts.
+
+        Args:
+            table_name: Name of the table to create (must exist in metadata.tables).
+            metadata: SQLAlchemy MetaData instance that holds the source table definition.
+            engine: SQLAlchemy Engine used to execute the CREATE TABLE statement.
+
+        Returns:
+            New MetaData instance containing the newly created table, or None on error.
+        """
         try:
             existing_table = metadata.tables[table_name]
             new_metadata = MetaData()
@@ -54,6 +77,17 @@ class PostgreSqlClient:
             logger.error(e)
 
     def upsert(self, data: list[dict], table: Table, metadata: MetaData) -> None:
+        """Insert records into a table, updating existing rows on primary key conflict.
+
+        Creates the target table if it does not exist, then executes a PostgreSQL
+        INSERT … ON CONFLICT DO UPDATE statement (upsert) for all provided records.
+        Non-primary-key columns are overwritten with the incoming values on conflict.
+
+        Args:
+            data: List of dicts where keys match column names in the target table.
+            table: SQLAlchemy Table object defining the target schema and primary key.
+            metadata: SQLAlchemy MetaData instance used to create the table if absent.
+        """
         try:
             metadata.create_all(self.engine)
             key_columns = [

@@ -51,5 +51,5 @@ class SBApiClient:
             headers=headers)
         if response.status_code == 200:
             return response.json()
-        else:
-            logger.error(f"Failed to extract data from SB API. Status Code: {response.status_code}. Response: {response.text}")
+        logger.error(f"Failed to extract data from SB API. Status Code: {response.status_code}. Response: {response.text}")
+        return []

@@ -22,8 +22,23 @@ BRONZE_TO_SILVER_COLUMN_MAP = {
 SILVER_PK_COLUMNS = ["period_date", "entity", "province", "person_type", "currency"]
 SILVER_RATE_COLUMNS = ["weighted_avg_rate_by_balance", "weighted_avg_rate"]
 
-
 def transform_earnings_data(data: list[dict]) -> pd.DataFrame:
+    """Transform raw bronze earnings data into the silver layer format.
+
+    Applies the following steps in order:
+    1. Strip leading/trailing whitespace from all string columns.
+    2. Rename columns from Spanish/camelCase (bronze) to English/snake_case (silver).
+    3. Cast period_date from "YYYY-MM" string to Python date (first day of month).
+    4. Drop rows with null values in any primary key column and log a warning.
+    5. Log a warning (without dropping) for rows with negative balance values.
+    6. Log a warning (without dropping) for rows with rate values outside [0, 100].
+
+    Args:
+        data: List of raw record dicts as returned by the bronze layer.
+
+    Returns:
+        Cleaned and typed DataFrame ready for loading into silver.earnings.
+    """
     df = pd.DataFrame(data)
 
     # Strip whitespace from all string columns
@@ -56,8 +71,18 @@ def transform_earnings_data(data: list[dict]) -> pd.DataFrame:
     logger.info(f"Transformation complete. {len(df)} rows ready for silver layer.")
     return df
 
-
 def load_silver_earnings_data(df: pd.DataFrame, client: PostgreSqlClient, metadata: MetaData) -> None:
+    """Upsert a silver earnings DataFrame into the PostgreSQL silver schema.
+
+    Creates the silver.earnings table if it does not exist, then performs an
+    upsert (INSERT … ON CONFLICT DO UPDATE) keyed on the 5-column composite
+    primary key: period_date, entity, province, person_type, currency.
+
+    Args:
+        df: Transformed DataFrame produced by transform_earnings_data.
+        client: PostgreSQL client used to execute the upsert.
+        metadata: SQLAlchemy MetaData instance bound to the silver schema.
+    """
     silver_earnings_table = Table(
         "earnings",
         metadata,
