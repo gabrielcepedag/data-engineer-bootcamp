@@ -11,7 +11,22 @@ def extract_earnings_data(
         entity_types: tuple[str],
         start_date: date,
         records_per_page: int
-    ) -> dict:
+    ) -> list:
+    """Extract earnings data from the SB API for one or more entity types.
+
+    Paginates through the API until a partial page is received, which signals
+    the end of available data. If the API returns an empty or error response
+    for any page, pagination stops for that entity type and a warning is logged.
+
+    Args:
+        sb_api_clients: Initialized SBApiClient instance.
+        entity_types: Sequence of entity type codes to query (e.g. ["BM", "BAyC"]).
+        start_date: Earliest period to fetch data from (inclusive).
+        records_per_page: Number of records to request per API call.
+
+    Returns:
+        List of raw record dicts combining all entity types and all pages.
+    """
     data = []
     for entity_type in entity_types:
         current_page = 1
@@ -42,7 +57,21 @@ def extract_earnings_data(
     return data
 
 
-def load_earnings_data(df, client: PostgreSqlClient, metadata: MetaData):
+def load_earnings_data(df, client: PostgreSqlClient, metadata: MetaData) -> None:
+    """Upsert raw earnings records into the PostgreSQL bronze schema.
+
+    Creates the bronze.earnings table if it does not exist, then performs an
+    upsert keyed on the 5-column composite primary key:
+    periodo, entidad, provincia, persona, divisa.
+
+    Column names remain in the original Spanish/camelCase format as received
+    from the API — no renaming is done at this layer.
+
+    Args:
+        df: List of raw record dicts as returned by extract_earnings_data.
+        client: PostgreSQL client used to execute the upsert.
+        metadata: SQLAlchemy MetaData instance bound to the bronze schema.
+    """
     earnings_table = Table(
         "earnings",
         metadata,

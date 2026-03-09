@@ -51,6 +51,32 @@ def run_earnings_pipeline(
         silver_schema="silver",
         gold_schema="gold",
     ):
+    """Execute the full earnings ETL pipeline: Bronze → Silver → Gold.
+
+    Pipeline steps:
+    1. Read config.params to determine start_date (incremental or full load)
+       and records_per_page.
+    2. Extract earnings data from the SB API starting from start_date.
+    3. Upsert raw records into the bronze schema.
+    4. Read the full bronze table back from the database.
+    5. Transform bronze data (rename, cast, cleanse) into the silver format.
+    6. Upsert transformed records into the silver schema.
+    7. Aggregate silver data into four gold tables and write each to both
+       PostgreSQL and a local Parquet file.
+    8. Update config.params with the latest period successfully loaded.
+
+    Args:
+        server_name: PostgreSQL host (e.g. "postgres" inside Docker).
+        database_name: Name of the target database.
+        username: Database user.
+        password: Database password.
+        port: Database port (default 5432).
+        api_key: SB API subscription key.
+        config_schema: Schema that holds config.params (default "config").
+        bronze_schema: Schema for raw ingested data (default "bronze").
+        silver_schema: Schema for cleaned/typed data (default "silver").
+        gold_schema: Schema for aggregated analytics tables (default "gold").
+    """
 
     logger.info("=" * 60)
     logger.info("  EARNINGS PIPELINE — START")
