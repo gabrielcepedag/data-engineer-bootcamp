@@ -10,5 +10,5 @@ CREATE TABLE config.params (
     param_value VARCHAR(300) 
 );
 
-INSERT INTO config.params (param_name) VALUES ('last_pipeline_execution');
-INSERT INTO config.params (param_name) VALUES ('records_per_page');
+INSERT INTO config.params (param_name, param_value) VALUES ('last_pipeline_execution', NULL);
+INSERT INTO config.params (param_name, param_value) VALUES ('records_per_page', '500');

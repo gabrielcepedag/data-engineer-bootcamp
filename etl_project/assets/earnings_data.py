@@ -26,6 +26,11 @@ def extract_earnings_data(
                 total_records=records_per_page
             )
 
+            if not payload:
+                logger.warning(f"Empty response for entity_type={entity_type}, page={current_page}. Stopping pagination.")
+                data_is_empty = True
+                continue
+
             data.extend(payload)
 
             if len(payload) < records_per_page:

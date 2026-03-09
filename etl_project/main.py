@@ -27,7 +27,6 @@ if __name__ == "__main__":
         password=db_password,
         port=db_port,
         api_key=api_key,
-        records_per_page=500,
         config_schema=config_schema,
         bronze_schema=bronze_schema,
         silver_schema=silver_schema,

@@ -1,3 +1,4 @@
+import os
 from loguru import logger
 from datetime import date
 from sqlalchemy import MetaData
@@ -13,8 +14,29 @@ from assets.earnings_data import (
 
 from assets.silver_earnings_data import (
     transform_earnings_data,
-    load_silver_earnings_data
+    load_silver_earnings_data,
 )
+
+from assets.gold_earnings_data import (
+    transform_gold_by_entity,
+    transform_gold_by_province,
+    transform_gold_by_person_type,
+    transform_gold_by_currency,
+    load_gold_data,
+)
+
+from assets.config_data import (
+    get_last_period,
+    get_records_per_page,
+    set_last_period,
+)
+
+
+def _next_month(d: date) -> date:
+    """Return the first day of the month following d."""
+    if d.month == 12:
+        return date(d.year + 1, 1, 1)
+    return date(d.year, d.month + 1, 1)
 
 
 def run_earnings_pipeline(
@@ -24,20 +46,21 @@ def run_earnings_pipeline(
         password,
         port,
         api_key,
-        records_per_page,
         config_schema="config",
         bronze_schema="bronze",
         silver_schema="silver",
         gold_schema="gold",
     ):
 
-    logger.info("Starting Earnings Pipeline...")
-
+    logger.info("=" * 60)
+    logger.info("  EARNINGS PIPELINE — START")
+    logger.info("=" * 60)
 
     # -----------------------------------------
     # Clients
     # -----------------------------------------
 
+    logger.info("[INIT] Connecting to PostgreSQL...")
     postgres_client = PostgreSqlClient(
         server_name=server_name,
         database_name=database_name,
@@ -45,48 +68,73 @@ def run_earnings_pipeline(
         password=password,
         port=port
     )
+    logger.info(f"[INIT] Connected to {database_name}@{server_name}:{port}")
 
+    logger.info("[INIT] Initializing SB API client...")
     sb_client = SBApiClient(api_key=api_key)
+    logger.info("[INIT] Clients ready")
+
+    # -----------------------------------------
+    # CONFIG — incremental load params
+    # -----------------------------------------
+
+    logger.info("-" * 60)
+    logger.info("[CONFIG] Reading pipeline parameters from config.params...")
+
+    records_per_page = get_records_per_page(postgres_client)
+    last_period = get_last_period(postgres_client)
+
+    logger.info(f"[CONFIG] records_per_page  = {records_per_page}")
+    logger.info(f"[CONFIG] last_pipeline_execution = {last_period or 'NULL (first run)'}")
+
+    if last_period is None:
+        default_start = os.getenv("DEFAULT_START_DATE", "2026-01-01")
+        start_date = date.fromisoformat(default_start)
+        logger.info(f"[CONFIG] Mode: FULL LOAD — start_date = {start_date}")
+    else:
+        start_date = _next_month(last_period)
+        logger.info(f"[CONFIG] Mode: INCREMENTAL — start_date = {start_date}")
 
     # -----------------------------------------
     # EXTRACT
     # -----------------------------------------
 
-    logger.info("Extracting earnings data from API")
+    logger.info("-" * 60)
+    logger.info(f"[EXTRACT] Fetching data from SB API (start_date={start_date}, pages of {records_per_page})...")
 
     raw_data = extract_earnings_data(
-        sb_client, ['BM'], 
-        date(2026,1,1), 
+        sb_client, ['BM'],
+        start_date,
         records_per_page
     )
 
     if raw_data is None or len(raw_data) == 0:
-        logger.error("No data returned from API. Stopping pipeline.")
+        logger.error("[EXTRACT] No data returned from API. Stopping pipeline.")
         return
-    
-    logger.info(f"Extracted {len(raw_data)} records")
+
+    logger.info(f"[EXTRACT] Done — {len(raw_data)} records fetched")
 
     # -----------------------------------------
     # LOAD BRONZE
     # -----------------------------------------
 
+    logger.info("-" * 60)
+    logger.info(f"[BRONZE] Upserting {len(raw_data)} records into {bronze_schema}.earnings...")
+
     bronze_metadata = MetaData(schema=bronze_schema)
-
-    logger.info("Loading data into Bronze layer")
-
     load_earnings_data(
         df=raw_data,
         client=postgres_client,
         metadata=bronze_metadata
     )
 
-    logger.info("Bronze load complete")
+    logger.info(f"[BRONZE] Upsert complete → {bronze_schema}.earnings")
 
     # -----------------------------------------
     # READ BRONZE
     # -----------------------------------------
 
-    logger.info("Reading Bronze data")
+    logger.info(f"[BRONZE] Reading full table {bronze_schema}.earnings for silver transform...")
 
     bronze_df = read_bronze_earnings_data(
         client=postgres_client,
@@ -94,39 +142,83 @@ def run_earnings_pipeline(
     )
 
     if bronze_df is None or len(bronze_df) == 0:
-        logger.error("No data found in Bronze. Stopping pipeline.")
+        logger.error("[BRONZE] No data found after read. Stopping pipeline.")
         return
 
-    logger.info(f"Read {len(bronze_df)} records from Bronze")
+    logger.info(f"[BRONZE] Read complete — {len(bronze_df)} rows | columns: {list(bronze_df.columns)}")
 
     # -----------------------------------------
     # TRANSFORM (SILVER)
     # -----------------------------------------
 
-    logger.info("Transforming Bronze data for Silver layer")
+    logger.info("-" * 60)
+    logger.info("[SILVER] Transforming bronze data (rename, cast, cleanse)...")
 
     silver_df = transform_earnings_data(bronze_df)
 
     if silver_df is None or len(silver_df) == 0:
-        logger.error("Transformation returned no data.")
+        logger.error("[SILVER] Transformation returned no data. Stopping pipeline.")
         return
 
-    logger.info(f"Transformed {len(silver_df)} records")
+    periods = sorted(silver_df["period_date"].unique())
+    logger.info(f"[SILVER] Transform complete — {len(silver_df)} rows")
+    logger.info(f"[SILVER] Periods in data: {[str(p) for p in periods]}")
 
     # -----------------------------------------
     # LOAD SILVER
     # -----------------------------------------
 
+    logger.info(f"[SILVER] Upserting into {silver_schema}.earnings...")
+
     silver_metadata = MetaData(schema=silver_schema)
-
-    logger.info("Loading data into Silver layer")
-
     load_silver_earnings_data(
         df=silver_df,
         client=postgres_client,
         metadata=silver_metadata
     )
 
-    logger.info("Silver load complete")
+    logger.info(f"[SILVER] Upsert complete → {silver_schema}.earnings")
 
-    logger.success("Earnings Pipeline finished successfully")
+    # -----------------------------------------
+    # TRANSFORM + LOAD GOLD
+    # -----------------------------------------
+
+    logger.info("-" * 60)
+    logger.info("[GOLD] Building aggregated gold tables...")
+
+    gold_metadata = MetaData(schema=gold_schema)
+    parquet_dir = os.getenv("PARQUET_OUTPUT_DIR", "data/gold")
+
+    gold_tables = {
+        "earnings_by_entity":      transform_gold_by_entity(silver_df),
+        "earnings_by_province":    transform_gold_by_province(silver_df),
+        "earnings_by_person_type": transform_gold_by_person_type(silver_df),
+        "earnings_by_currency":    transform_gold_by_currency(silver_df),
+    }
+
+    for table_name, gold_df in gold_tables.items():
+        logger.info(f"[GOLD] {table_name} — {len(gold_df)} rows → upsert + parquet")
+        load_gold_data(
+            df=gold_df,
+            table_name=table_name,
+            client=postgres_client,
+            metadata=gold_metadata,
+            parquet_dir=parquet_dir,
+        )
+
+    logger.info(f"[GOLD] All tables loaded. Parquet files saved to: {parquet_dir}/")
+
+    # -----------------------------------------
+    # UPDATE CONFIG — mark last loaded period
+    # -----------------------------------------
+
+    logger.info("-" * 60)
+    logger.info("[CONFIG] Updating last_pipeline_execution...")
+
+    max_period = silver_df["period_date"].max()
+    set_last_period(postgres_client, max_period)
+    logger.info(f"[CONFIG] last_pipeline_execution = {max_period.strftime('%Y-%m')}")
+
+    logger.info("=" * 60)
+    logger.success("  EARNINGS PIPELINE — FINISHED SUCCESSFULLY")
+    logger.info("=" * 60)
