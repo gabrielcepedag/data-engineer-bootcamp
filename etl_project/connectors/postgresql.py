@@ -44,6 +44,7 @@ class PostgreSqlClient:
         Returns:
             DataFrame containing all rows returned by the query.
         """
+        import pandas as pd
         with self.engine.connect() as conn:
             return pd.read_sql(text(query), conn)
     
