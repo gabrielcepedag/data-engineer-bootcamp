@@ -22,7 +22,8 @@ BRONZE_TO_SILVER_COLUMN_MAP = {
 SILVER_PK_COLUMNS = ["period_date", "entity", "province", "person_type", "currency"]
 SILVER_RATE_COLUMNS = ["weighted_avg_rate_by_balance", "weighted_avg_rate"]
 
-"""Transform raw bronze earnings data into the silver layer format.
+def transform_earnings_data(data: list[dict]) -> pd.DataFrame:
+    """Transform raw bronze earnings data into the silver layer format.
 
     Applies the following steps in order:
     1. Strip leading/trailing whitespace from all string columns.
@@ -37,9 +38,7 @@ SILVER_RATE_COLUMNS = ["weighted_avg_rate_by_balance", "weighted_avg_rate"]
 
     Returns:
         Cleaned and typed DataFrame ready for loading into silver.earnings.
-"""
-def transform_earnings_data(data: list[dict]) -> pd.DataFrame:
-
+    """
     df = pd.DataFrame(data)
 
     # Strip whitespace from all string columns
@@ -72,7 +71,8 @@ def transform_earnings_data(data: list[dict]) -> pd.DataFrame:
     logger.info(f"Transformation complete. {len(df)} rows ready for silver layer.")
     return df
 
-"""Upsert a silver earnings DataFrame into the PostgreSQL silver schema.
+def load_silver_earnings_data(df: pd.DataFrame, client: PostgreSqlClient, metadata: MetaData) -> None:
+    """Upsert a silver earnings DataFrame into the PostgreSQL silver schema.
 
     Creates the silver.earnings table if it does not exist, then performs an
     upsert (INSERT … ON CONFLICT DO UPDATE) keyed on the 5-column composite
@@ -82,9 +82,7 @@ def transform_earnings_data(data: list[dict]) -> pd.DataFrame:
         df: Transformed DataFrame produced by transform_earnings_data.
         client: PostgreSQL client used to execute the upsert.
         metadata: SQLAlchemy MetaData instance bound to the silver schema.
-"""
-def load_silver_earnings_data(df: pd.DataFrame, client: PostgreSqlClient, metadata: MetaData) -> None:
-
+    """
     silver_earnings_table = Table(
         "earnings",
         metadata,
