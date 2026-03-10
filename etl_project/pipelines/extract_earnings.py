@@ -38,8 +38,7 @@ def _next_month(d: date) -> date:
         return date(d.year + 1, 1, 1)
     return date(d.year, d.month + 1, 1)
 
-    load_silver_earnings_data
-)
+    load_silver_earnings_data()
 
 
 def run_earnings_pipeline(
@@ -128,16 +127,9 @@ def run_earnings_pipeline(
         start_date = _next_month(last_period)
         logger.info(f"[CONFIG] Mode: INCREMENTAL — start_date = {start_date}")
 
-    # -----------------------------------------
-    # EXTRACT
-    # -----------------------------------------
-
     logger.info("-" * 60)
     logger.info(f"[EXTRACT] Fetching data from SB API (start_date={start_date}, pages of {records_per_page})...")
 
-    raw_data = extract_earnings_data(
-        sb_client, ['BM'],
-        start_date,
     # -----------------------------------------
     # EXTRACT
     # -----------------------------------------
@@ -152,10 +144,6 @@ def run_earnings_pipeline(
 
     if raw_data is None or len(raw_data) == 0:
         logger.error("[EXTRACT] No data returned from API. Stopping pipeline.")
-        return
-
-    logger.info(f"[EXTRACT] Done — {len(raw_data)} records fetched")
-        logger.error("No data returned from API. Stopping pipeline.")
         return
     
     logger.info(f"Extracted {len(raw_data)} records")
@@ -268,61 +256,3 @@ def run_earnings_pipeline(
     logger.info("=" * 60)
     logger.success("  EARNINGS PIPELINE — FINISHED SUCCESSFULLY")
     logger.info("=" * 60)
-    logger.info("Loading data into Bronze layer")
-
-    load_earnings_data(
-        df=raw_data,
-        client=postgres_client,
-        metadata=bronze_metadata
-    )
-
-    logger.info("Bronze load complete")
-
-    # -----------------------------------------
-    # READ BRONZE
-    # -----------------------------------------
-
-    logger.info("Reading Bronze data")
-
-    bronze_df = read_bronze_earnings_data(
-        client=postgres_client,
-        schema=bronze_schema
-    )
-
-    if bronze_df is None or len(bronze_df) == 0:
-        logger.error("No data found in Bronze. Stopping pipeline.")
-        return
-
-    logger.info(f"Read {len(bronze_df)} records from Bronze")
-
-    # -----------------------------------------
-    # TRANSFORM (SILVER)
-    # -----------------------------------------
-
-    logger.info("Transforming Bronze data for Silver layer")
-
-    silver_df = transform_earnings_data(bronze_df)
-
-    if silver_df is None or len(silver_df) == 0:
-        logger.error("Transformation returned no data.")
-        return
-
-    logger.info(f"Transformed {len(silver_df)} records")
-
-    # -----------------------------------------
-    # LOAD SILVER
-    # -----------------------------------------
-
-    silver_metadata = MetaData(schema=silver_schema)
-
-    logger.info("Loading data into Silver layer")
-
-    load_silver_earnings_data(
-        df=silver_df,
-        client=postgres_client,
-        metadata=silver_metadata
-    )
-
-    logger.info("Silver load complete")
-
-    logger.success("Earnings Pipeline finished successfully")
