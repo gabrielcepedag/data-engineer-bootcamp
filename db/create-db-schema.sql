@@ -12,3 +12,14 @@ CREATE TABLE config.params (
 
 INSERT INTO config.params (param_name, param_value) VALUES ('last_pipeline_execution', NULL);
 INSERT INTO config.params (param_name, param_value) VALUES ('records_per_page', '500');
+
+CREATE TABLE config.pipeline_runs (
+    run_id        SERIAL PRIMARY KEY,
+    pipeline_name VARCHAR(100) NOT NULL,
+    start_time    TIMESTAMP    NOT NULL,
+    end_time      TIMESTAMP,
+    status        VARCHAR(20),
+    records_extracted  INTEGER,
+    records_loaded     INTEGER,
+    error_message      TEXT
+);
