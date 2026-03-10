@@ -44,6 +44,8 @@ def _next_month(d: date) -> date:
         return date(d.year + 1, 1, 1)
     return date(d.year, d.month + 1, 1)
 
+    load_silver_earnings_data()
+
 
 def run_earnings_pipeline(
         server_name,
@@ -90,6 +92,9 @@ def run_earnings_pipeline(
     logger.info("  EARNINGS PIPELINE — START")
     logger.info("=" * 60)
 
+    logger.info("Starting Earnings Pipeline...")
+
+
     # -----------------------------------------
     # Clients
     # -----------------------------------------
@@ -105,6 +110,7 @@ def run_earnings_pipeline(
     logger.info(f"[INIT] Connected to {database_name}@{server_name}:{port}")
 
     logger.info("[INIT] Initializing SB API client...")
+
     sb_client = SBApiClient(api_key=api_key)
     logger.info("[INIT] Clients ready")
 

@@ -56,9 +56,7 @@ def extract_earnings_data(
     logger.info("API extraction complete.")
     return data
 
-
-def load_earnings_data(df, client: PostgreSqlClient, metadata: MetaData) -> None:
-    """Upsert raw earnings records into the PostgreSQL bronze schema.
+"""Upsert raw earnings records into the PostgreSQL bronze schema.
 
     Creates the bronze.earnings table if it does not exist, then performs an
     upsert keyed on the 5-column composite primary key:
@@ -71,7 +69,8 @@ def load_earnings_data(df, client: PostgreSqlClient, metadata: MetaData) -> None
         df: List of raw record dicts as returned by extract_earnings_data.
         client: PostgreSQL client used to execute the upsert.
         metadata: SQLAlchemy MetaData instance bound to the bronze schema.
-    """
+"""
+def load_earnings_data(df, client: PostgreSqlClient, metadata: MetaData):
     earnings_table = Table(
         "earnings",
         metadata,

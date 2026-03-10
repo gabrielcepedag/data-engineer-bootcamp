@@ -22,7 +22,6 @@ BRONZE_TO_SILVER_COLUMN_MAP = {
 SILVER_PK_COLUMNS = ["period_date", "entity", "province", "person_type", "currency"]
 SILVER_RATE_COLUMNS = ["weighted_avg_rate_by_balance", "weighted_avg_rate"]
 
-
 def transform_earnings_data(data: list[dict]) -> pd.DataFrame:
     """Transform raw bronze earnings data into the silver layer format.
 
@@ -71,7 +70,6 @@ def transform_earnings_data(data: list[dict]) -> pd.DataFrame:
 
     logger.info(f"Transformation complete. {len(df)} rows ready for silver layer.")
     return df
-
 
 def load_silver_earnings_data(df: pd.DataFrame, client: PostgreSqlClient, metadata: MetaData) -> None:
     """Upsert a silver earnings DataFrame into the PostgreSQL silver schema.
